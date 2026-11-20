@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
@@ -6,4 +6,10 @@ export default defineConfig({
   clearScreen: false,
   server: { port: 5173, strictPort: true },
   build: { target: "chrome105", sourcemap: false },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+    css: false,
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+  },
 });
