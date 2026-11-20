@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-100 text-slate-900 antialiased;
+}
+
+html.dark body {
+  @apply bg-slate-950 text-slate-100;
+}
+
+.log-view {
+  font-family: "Cascadia Mono", "Consolas", "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+}
