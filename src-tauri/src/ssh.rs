@@ -499,7 +499,7 @@ async fn run_command(
 ) -> AppResult<String> {
     send_line(write, cmd).await?;
     let buf = expect_marker(read, marker, stage, STEP_TIMEOUT).await?;
-    let text = String::from_utf8_lossy(&buf);
+    let text = kubectl::strip_ansi(&String::from_utf8_lossy(&buf));
     Ok(kubectl::cut_at_marker(&text, marker).to_string())
 }
 

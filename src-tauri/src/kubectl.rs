@@ -9,6 +9,60 @@ pub fn escape_single_quote(s: &str) -> String {
     s.replace('\'', r"'\''")
 }
 
+/// Loại bỏ ANSI escape sequence khỏi output PTY. Shell remote qua PTY phát
+/// các sequence điều khiển xen kẽ output lệnh (bracketed paste `\e[?2004l`,
+/// kitty keyboard `\e[?103;5u`...) — không lọc sẽ nhầm thành tên pod/container.
+pub fn strip_ansi(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(b.len());
+    let mut i = 0usize;
+    while i < b.len() {
+        if b[i] == 0x1b {
+            match b.get(i + 1) {
+                // CSI: ESC [ params(0x20-0x3F) final(0x40-0x7E)
+                Some(b'[') => {
+                    let mut j = i + 2;
+                    while j < b.len() && (0x20..=0x3f).contains(&b[j]) {
+                        j += 1;
+                    }
+                    i = if j < b.len() && (0x40..=0x7e).contains(&b[j]) { j + 1 } else { j };
+                }
+                // Chuỗi string-type (OSC/DCS/PM/APC): kết thúc bằng BEL hoặc ST
+                Some(b']' | b'P' | b'X' | b'^' | b'_') => {
+                    let mut j = i + 2;
+                    let mut end = None;
+                    while j < b.len() {
+                        if b[j] == 0x07 {
+                            end = Some(j + 1);
+                            break;
+                        }
+                        if b[j] == 0x1b && b.get(j + 1) == Some(&b'\\') {
+                            end = Some(j + 2);
+                            break;
+                        }
+                        j += 1;
+                    }
+                    i = end.unwrap_or(b.len());
+                }
+                // ESC + intermediate(s) + final (vd. `ESC ( B`)
+                Some(&c) if (0x20..=0x2f).contains(&c) => {
+                    let mut j = i + 1;
+                    while j < b.len() && (0x20..=0x2f).contains(&b[j]) {
+                        j += 1;
+                    }
+                    i = if j < b.len() { j + 1 } else { j };
+                }
+                Some(_) => i += 2,
+                None => i += 1,
+            }
+            continue;
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 pub fn search_command(context: &str, keyword: &str, request_id: &str) -> String {
     let kw = escape_single_quote(keyword);
     format!(
@@ -114,6 +168,7 @@ pub fn cut_at_marker<'a>(output: &'a str, marker: &str) -> &'a str {
 /// tách cột bằng >=2 khoảng trắng. Trả về (rows, bị_cắt_ở_limit).
 pub fn parse_pod_rows(output: &str) -> (Vec<PodRow>, bool) {
     let re = regex::Regex::new(r"\s{2,}").expect("regex hop le");
+    let output = strip_ansi(output);
     let mut rows = Vec::new();
     for line in output.lines() {
         let line = line.trim_end_matches('\r').trim();
@@ -159,8 +214,9 @@ pub fn parse_container_names(output: &str, pod: &str, ns: &str) -> Result<Vec<St
     if output.contains("NotFound") || output.contains("not found") || output.contains("No resources found") {
         return Err(AppError::PodNotFound { pod: pod.into(), ns: ns.into() });
     }
+    let output = strip_ansi(output);
     let mut names = Vec::new();
-    for line in cut_at_marker(output, "__LAZY_CT_").lines() {
+    for line in cut_at_marker(&output, "__LAZY_CT_").lines() {
         let name = line.trim_end_matches('\r').trim();
         if name.is_empty()
             || name.contains("__LAZY_")
@@ -177,7 +233,8 @@ pub fn parse_container_names(output: &str, pod: &str, ns: &str) -> Result<Vec<St
 
 /// Parse danh sách context (`kubectl config get-contexts -o name`).
 pub fn parse_contexts(output: &str) -> Vec<String> {
-    cut_at_marker(output, "__LAZY_CTX_")
+    let output = strip_ansi(output);
+    cut_at_marker(&output, "__LAZY_CTX_")
         .lines()
         .map(|l| l.trim_end_matches('\r').trim())
         .filter(|l| {
@@ -300,6 +357,33 @@ mod tests {
         assert!(err.is_err());
 
         assert!(parse_container_names("app\n__LAZY_CT_m1__\n", "pod", "ns").is_ok());
+    }
+
+    #[test]
+    fn strip_ansi_sequences() {
+        // bug thực tế: kitty keyboard + bracketed paste dính trước tên container
+        assert_eq!(strip_ansi("\u{1b}[?103;5u\u{1b}[?2004lmogivi-website"), "mogivi-website");
+        assert_eq!(strip_ansi("plain\nline2\r\n"), "plain\nline2\r\n");
+        assert_eq!(strip_ansi("\u{1b}]0;title\u{7}abc"), "abc");
+        assert_eq!(strip_ansi("\u{1b}]0;title\u{1b}\\abc"), "abc");
+        assert_eq!(strip_ansi("\u{1b}(B\u{1b}=abc"), "abc");
+        assert_eq!(strip_ansi("abc\u{1b}[?2004"), "abc");
+        assert_eq!(strip_ansi("tiếng\u{1b}[KViệt"), "tiếngViệt");
+    }
+
+    #[test]
+    fn parse_containers_ignores_ansi_garbage() {
+        let out = "\u{1b}[?103;5u\u{1b}[?2004lmogivi-website\napp\n__LAZY_CT_m1__\n";
+        let names = parse_container_names(out, "pod", "ns").unwrap();
+        assert_eq!(names, vec!["mogivi-website", "app"]);
+    }
+
+    #[test]
+    fn parse_rows_ignores_ansi_garbage() {
+        let out = "\u{1b}[?2004lns   pod-1   1/1   Running   0   1d\n";
+        let (rows, _) = parse_pod_rows(out);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].pod, "pod-1");
     }
 
     #[test]

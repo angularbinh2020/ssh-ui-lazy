@@ -19,3 +19,7 @@
 
 ## 7. Nhiệm vụ review merge / compare nhánh không cần ghi change-log
 - Khi thực hiện các nhiệm vụ **review merge** hoặc **so sánh (compare) các nhánh** (vd: `git diff`, so sánh code giữa 2 branch...), **không cần** cập nhật file change-log theo rule 5.
+
+## 8. Cập nhật test khi thay đổi logic / nghiệp vụ
+- Khi thêm / sửa code mà thay đổi **logic hoặc nghiệp vụ**, phải cập nhật (thêm / sửa) test tương ứng.
+- Trước khi hoàn thành nhiệm vụ, phải chạy toàn bộ test và đảm bảo **tất cả test pass**.
