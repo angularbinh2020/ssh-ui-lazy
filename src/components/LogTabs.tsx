@@ -1,8 +1,15 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
-import Ansi from "ansi-to-react";
+import { memo, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import AnsiDefault from "ansi-to-react";
 import { useStore } from "../store/useStore";
 import type { LogTab } from "../types";
 import { api, errMessage } from "../api";
+
+// ansi-to-react là CJS thuần (__esModule + exports.default) nên Vite dev trả
+// default import = cả module object; phải unwrap thủ công (dev/build/test đều chạy đúng)
+type AnsiProps = { children?: string };
+type AnsiModule = ComponentType<AnsiProps> & { default?: ComponentType<AnsiProps> };
+const _AnsiModule = AnsiDefault as AnsiModule;
+const Ansi: ComponentType<AnsiProps> = _AnsiModule.default ?? _AnsiModule;
 
 const RENDER_LIMIT = 2000;
 
