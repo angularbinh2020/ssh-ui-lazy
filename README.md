@@ -74,5 +74,5 @@ npm run tauri build
 Chi tiết thiết kế xem [PLAN.md](PLAN.md).
 
 Link tải:
- https://drive.google.com/file/d/1Rt-w1G6-heFcNozGZm9ebXX23-P16gHF/view?usp=drive_link
-https://drive.google.com/file/d/10rKoOPuFjL9T7WFLFKcIFowbkPVf75TL/view?usp=drive_link
+https://drive.google.com/file/d/17yAZB3pwLiiNAzOoa80Ve18Em7nyLSI0/view?usp=drive_link
+https://drive.google.com/file/d/1D9TFVVjcYR4NwSFiwFSalsm0suzdrTqW/view?usp=drive_link

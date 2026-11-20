@@ -13,13 +13,59 @@ const Ansi: ComponentType<AnsiProps> = _AnsiModule.default ?? _AnsiModule;
 
 const RENDER_LIMIT = 2000;
 
+const DEFAULT_HEIGHT_PCT = 45;
+const MIN_HEIGHT_PCT = 15;
+const MAX_HEIGHT_PCT = 85;
+
 export default function LogTabs() {
   const { tabs, activeTabId, setActiveTab, closeTab } = useStore();
+  const [heightPct, setHeightPct] = useState(DEFAULT_HEIGHT_PCT);
+  const [maximized, setMaximized] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   if (tabs.length === 0) return null;
   const active = tabs.find((t) => t.id === activeTabId) ?? tabs[0];
 
+  // kéo viền trên khung log để tăng/giảm chiều cao (PodSearch bên trên co giãn theo)
+  function onResizeStart(e: React.PointerEvent) {
+    e.preventDefault();
+    const container = containerRef.current;
+    if (!container) return;
+    const move = (ev: PointerEvent) => {
+      const parent = container.parentElement;
+      if (!parent) return;
+      const rect = parent.getBoundingClientRect();
+      if (rect.height <= 0) return;
+      const pct = ((rect.bottom - ev.clientY) / rect.height) * 100;
+      setHeightPct(Math.min(MAX_HEIGHT_PCT, Math.max(MIN_HEIGHT_PCT, pct)));
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.style.userSelect = "";
+    };
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+
   return (
-    <div className="flex min-h-0 flex-col border-t border-slate-200 dark:border-slate-800" style={{ height: "45%" }}>
+    <div
+      ref={containerRef}
+      className={
+        maximized
+          ? "absolute inset-0 z-20 flex min-h-0 flex-col border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950"
+          : "flex min-h-0 flex-col border-t border-slate-200 dark:border-slate-800"
+      }
+      style={maximized ? undefined : { height: `${heightPct}%` }}
+    >
+      {!maximized && (
+        <div
+          className="h-1.5 w-full shrink-0 cursor-row-resize hover:bg-blue-200 dark:hover:bg-blue-900/60"
+          onPointerDown={onResizeStart}
+          onDoubleClick={() => setHeightPct(DEFAULT_HEIGHT_PCT)}
+          title="Kéo để thay đổi chiều cao khung log (double-click để về mặc định)"
+        />
+      )}
       <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50 px-2 dark:border-slate-800 dark:bg-slate-900">
         {tabs.map((t) => (
           <div
@@ -48,6 +94,14 @@ export default function LogTabs() {
             </button>
           </div>
         ))}
+        <button
+          className="ml-auto shrink-0 rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+          onClick={() => setMaximized((v) => !v)}
+          title={maximized ? "Thu nhỏ khung log" : "Phóng to khung log"}
+          aria-label={maximized ? "Thu nhỏ khung log" : "Phóng to khung log"}
+        >
+          {maximized ? "🗗 thu nhỏ" : "⛶ phóng to"}
+        </button>
       </div>
       <LogTabPanel key={active.id} tab={active} />
     </div>
